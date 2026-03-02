@@ -1,0 +1,41 @@
+{
+  "id": "onebot",
+  "name": "OneBot Channel",
+  "version": "1.1.0",
+  "description": "OneBot v11 protocol channel (QQ/Lagrange.Core via WebSocket)",
+  "author": "Lagrange.Onebot",
+  "channels": ["onebot"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "type": {
+        "type": "string",
+        "enum": ["forward-websocket", "backward-websocket"],
+        "description": "连接类型：正向或反向 WebSocket"
+      },
+      "host": { "type": "string", "description": "OneBot 主机地址" },
+      "port": { "type": "number", "description": "OneBot 端口" },
+      "accessToken": { "type": "string", "description": "访问令牌（可选）" },
+      "path": { "type": "string", "description": "反向 WS 路径，默认 /onebot/v11/ws" },
+      "requireMention": {
+        "type": "boolean",
+        "default": true,
+        "description": "群聊是否必须 @ 机器人才回复"
+      },
+      "groupIncrease": {
+        "type": "object",
+        "properties": {
+          "enabled": { "type": "boolean", "default": false },
+          "message": { "type": "string", "description": "欢迎语模板，{userId} 可替换为新成员 QQ" }
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "accessToken": { "label": "Access Token", "sensitive": true },
+    "host": { "label": "主机地址", "placeholder": "127.0.0.1" },
+    "port": { "label": "端口", "placeholder": "8080" },
+    "requireMention": { "label": "群聊需 @ 回复" }
+  }
+}
