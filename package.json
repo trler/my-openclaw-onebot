@@ -45,7 +45,8 @@
   "scripts": {
     "build": "tsc",
     "test:connect": "npx tsx scripts/test-connect.ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "pub": "npm run build && npm publish"
   },
   "dependencies": {
     "ws": "^8.17.0",
