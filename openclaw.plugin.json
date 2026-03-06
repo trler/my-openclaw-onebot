@@ -29,6 +29,16 @@
           "enabled": { "type": "boolean", "default": false },
           "message": { "type": "string", "description": "欢迎语模板，{userId} 可替换为新成员 QQ" }
         }
+      },
+      "groupHistoryOnMention": {
+        "type": "boolean",
+        "default": false,
+        "description": "群聊被 @ 时是否获取历史消息作为上下文"
+      },
+      "groupHistoryLimit": {
+        "type": "number",
+        "default": 50,
+        "description": "获取历史消息的最大数量（仅在 groupHistoryOnMention 启用时生效）"
       }
     }
   },

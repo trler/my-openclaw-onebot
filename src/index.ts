@@ -141,6 +141,15 @@ function getRawText(msg: OneBotMessage): string {
     .join("");
 }
 
+/** 从消息段数组中提取文本 */
+function getTextFromMessageContent(message: Array<{ type: string; data?: Record<string, unknown> }> | undefined): string {
+  if (!Array.isArray(message)) return "";
+  return message
+    .filter((m) => m?.type === "text")
+    .map((m) => (m?.data as any)?.text ?? "")
+    .join("");
+}
+
 /** 检查群聊消息是否 @ 了机器人（self_id） */
 function isMentioned(msg: OneBotMessage, selfId: number): boolean {
   const arr = msg.message;
@@ -203,6 +212,19 @@ async function sendGroupMsg(groupId: number, text: string): Promise<void> {
     throw new Error("OneBot WebSocket not connected");
   }
   await sendOneBotAction(w, "send_group_msg", { group_id: groupId, message: text });
+}
+
+/** 获取群聊历史消息 */
+async function getGroupMsgHistory(groupId: number, params?: { message_id?: number; count?: number }): Promise<any[]> {
+  const w = ws;
+  if (!w || w.readyState !== WebSocket.OPEN) {
+    throw new Error("OneBot WebSocket not connected");
+  }
+  const result = await sendOneBotAction(w, "get_group_msg_history", {
+    group_id: groupId,
+    ...params,
+  });
+  return result?.data?.messages ?? [];
 }
 
 /** 发送图片：message 可为 file 路径（file://、http://、base64://）或消息段数组 */
@@ -368,6 +390,42 @@ async function processInboundMessage(api: any, msg: OneBotMessage): Promise<void
       envelope: envelopeOptions,
     }) ?? { content: [{ type: "text", text: messageText }] };
 
+  // 群聊被 @ 时获取历史消息作为上下文
+  const onebotCfg = cfg?.channels?.onebot ?? {};
+  const groupHistoryOnMention = (onebotCfg as any).groupHistoryOnMention ?? false;
+  const groupHistoryLimit = (onebotCfg as any).groupHistoryLimit ?? 50;
+  let historyContext: Array<{ senderId: string; senderName: string; text: string; timestamp: number }> = [];
+
+  if (isGroup && isMentioned(msg, selfId) && groupHistoryOnMention && groupId) {
+    try {
+      const history = await getGroupMsgHistory(groupId, { count: groupHistoryLimit });
+      if (history && history.length > 0) {
+        historyContext = history
+          .filter((m: any) => Number(m.user_id) !== Number(selfId))
+          .reverse()
+          .map((m: any) => {
+            const text = getTextFromMessageContent(m.message);
+            const senderId = String(m.user_id);
+            const senderName = m.sender?.nickname ?? m.sender?.card ?? senderId;
+            return { senderId, senderName, text, timestamp: m.time };
+          });
+        api.logger?.info?.(`[onebot] fetched ${historyContext.length} history messages for group ${groupId}`);
+      }
+    } catch (e: any) {
+      api.logger?.warn?.(`[onebot] failed to fetch group history: ${e?.message}`);
+    }
+  }
+
+  // 如果有历史消息，拼接到 RawBody
+  let finalRawBody = messageText;
+  if (historyContext.length > 0) {
+    const historyText = historyContext
+      .map((h) => `[${h.senderName}]: ${h.text}`)
+      .join("\n");
+    finalRawBody = `【群聊历史记录】\n${historyText}\n【以上是历史消息】\n\n用户消息: ${messageText}`;
+    api.logger?.info?.(`[onebot] history context prepended, total ${finalRawBody.length} chars`);
+  }
+
   const body = buildPendingHistoryContextFromMap
     ? buildPendingHistoryContextFromMap({
         historyMap: sessionHistories,
@@ -403,7 +461,7 @@ async function processInboundMessage(api: any, msg: OneBotMessage): Promise<void
 
   const ctxPayload = {
     Body: body,
-    RawBody: messageText,
+    RawBody: finalRawBody,
     From: isGroup ? `onebot:group:${groupId}` : `onebot:${userId}`,
     To: `onebot:${userId}`,
     SessionKey: sessionId,
